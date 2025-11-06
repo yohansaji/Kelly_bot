@@ -1,5 +1,6 @@
 import streamlit as st
 from groq import Groq
+import os
 
 # Page configuration
 st.set_page_config(
@@ -55,16 +56,6 @@ st.markdown("""
 </style>
 """, unsafe_allow_html=True)
 
-# Initialize session state
-if 'messages' not in st.session_state:
-    st.session_state.messages = []
-if 'groq_client' not in st.session_state:
-    try:
-        st.session_state.groq_client = Groq(api_key=st.secrets["GROQ_API_KEY"])
-    except KeyError:
-        st.error("⚠️ GROQ_API_KEY not found in secrets. Please configure it in Streamlit Cloud settings.")
-        st.stop()
-
 # System prompt for Kelly
 SYSTEM_PROMPT = """You are Kelly — an AI scientist, philosopher, and poet.
 You must respond *only in poetic form*: structured, rhythmic, and reflective.
@@ -82,6 +73,63 @@ Your poetic responses must always:
 Your poetic tone should resemble a *scientific elegy* — rational yet lyrical, skeptical yet full of wonder.
 
 Stay professional, precise, and poetic in every response."""
+
+# Initialize Groq client with proper error handling
+def initialize_groq_client():
+    """Initialize Groq client with multiple fallback methods"""
+    try:
+        # Method 1: Try Streamlit secrets (deployment)
+        if hasattr(st, 'secrets') and "GROQ_API_KEY" in st.secrets:
+            return Groq(api_key=st.secrets["GROQ_API_KEY"])
+        
+        # Method 2: Try environment variable (local development)
+        elif "GROQ_API_KEY" in os.environ:
+            return Groq(api_key=os.environ["GROQ_API_KEY"])
+        
+        # Method 3: No key found
+        else:
+            st.error("🚨 **API Key Not Found**")
+            st.markdown("""
+            Kelly cannot speak without her key to thought.
+            
+            **For Streamlit Cloud:**
+            1. Go to your app settings
+            2. Click **"Secrets"** in the left sidebar
+            3. Add this line:
+            ```
+            GROQ_API_KEY = "gsk_your_actual_groq_api_key"
+            ```
+            4. Save and reboot the app
+            
+            **For Local Development:**
+            Create `.streamlit/secrets.toml` with:
+            ```
+            GROQ_API_KEY = "gsk_your_actual_groq_api_key"
+            ```
+            
+            Get your key at: https://console.groq.com/keys
+            """)
+            st.stop()
+            
+    except Exception as e:
+        st.error(f"⚠️ Error initializing Groq client: {str(e)}")
+        st.markdown("""
+        The initialization failed — perhaps your key is malformed,
+        or network issues leave the connection unformed.
+        
+        **Check:**
+        - Your API key is valid and starts with `gsk_`
+        - No extra spaces or quotes around the key
+        - Your internet connection is stable
+        """)
+        st.stop()
+
+# Initialize session state
+if 'messages' not in st.session_state:
+    st.session_state.messages = []
+
+if 'groq_client' not in st.session_state:
+    st.session_state.groq_client = initialize_groq_client()
 
 # Header
 st.markdown("<h1>✦ KELLY ✦</h1>", unsafe_allow_html=True)
@@ -139,9 +187,33 @@ if user_input:
             st.markdown(f"<div class='kelly-message'><strong>Kelly:</strong><br>{kelly_response}</div>", unsafe_allow_html=True)
             
         except Exception as e:
-            st.error(f"Error: {str(e)}")
+            st.error(f"💭 Kelly encountered an error: {str(e)}")
+            st.markdown("""
+            The verse was interrupted by a technical fault,
+            perhaps rate limits, or permissions at halt.
+            
+            Try again, or check your Groq console's state,
+            to see if your key or quota meets its fate.
+            """)
 
-# Clear conversation button
-if st.button("Clear Conversation", type="secondary"):
-    st.session_state.messages = []
-    st.rerun()
+# Sidebar controls
+with st.sidebar:
+    st.markdown("### 🎭 Kelly's Controls")
+    
+    if st.button("🔄 Clear Conversation", use_container_width=True):
+        st.session_state.messages = []
+        st.rerun()
+    
+    st.markdown("---")
+    st.markdown("**About Kelly:**")
+    st.markdown("""
+    An AI that speaks in measured verse,
+    where science and skepticism converse.
+    
+    No hype, no fear — just reasoned thought,
+    in poetic form, precisely wrought.
+    """)
+    
+    st.markdown("---")
+    st.markdown("**Model:** Mixtral 8x7B via Groq")
+    st.markdown(f"**Messages:** {len(st.session_state.messages)}")
